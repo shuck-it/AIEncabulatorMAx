@@ -29,6 +29,7 @@ html, body { height: 100%; }
 body { background: var(--night); color: var(--ink); font-family: var(--body); overflow: hidden; }
 #stage { position: fixed; inset: 0; }
 #stage canvas, #stage video { touch-action: none; }
+html.auto .launch { display: none; }
 .launch {
   position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
   padding-block: 24px;
@@ -52,6 +53,8 @@ button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .toggle { display: flex; align-items: center; gap: 10px; color: var(--mute); font-size: 14px; }
 .toggle input { width: 18px; height: 18px; accent-color: var(--signal); }
 button.small { padding: 8px 12px; font-size: 14px; margin-left: auto; }
+.camlink { display: block; text-align: center; font: 700 17px/1 var(--body); color: var(--night); background: var(--signal); border-radius: 10px; padding: 16px 18px; text-decoration: none; }
+.camlink:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .note { color: #ffcf7a; font-size: 14px; line-height: 1.45; margin: 0; }
 .status {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; pointer-events: none;
@@ -67,9 +70,33 @@ button.small { padding: 8px 12px; font-size: 14px; margin-left: auto; }
 .hint { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 10;
   font-family: var(--label); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: 14px;
   background: rgba(10,18,34,.8); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; white-space: nowrap; }
+.shutter {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 12;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  width: 68px; height: 68px; padding: 0; border-radius: 50%;
+  background: rgba(255,255,255,.92); border: 5px solid var(--signal); box-shadow: 0 0 0 4px rgba(10,18,34,.45);
+}
+.shutter:active { transform: translateX(-50%) scale(.92); }
+.flash { position: fixed; inset: 0; background: #fff; z-index: 30; pointer-events: none; opacity: 0; transition: opacity .35s ease-out; }
+.flash.on { opacity: .9; transition: none; }
+.shot {
+  position: fixed; inset: 0; z-index: 40; background: rgba(6,10,20,.94);
+  display: grid; grid-template-rows: 1fr auto; gap: 14px; align-items: center; justify-items: center;
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.shot img { max-width: 100%; max-height: 100%; min-height: 0; border-radius: 12px; border: 2px solid var(--line); -webkit-touch-callout: default; }
+.shot-bar { display: grid; gap: 10px; width: min(420px, 100%); text-align: center; }
+.shot-bar .row { display: flex; gap: 10px; }
+.shot-bar .row button { flex: 1; }
+.shot-bar p { margin: 0; color: var(--mute); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 
+<script>
+  // Opened directly (not inside a viewer): skip the menu and go straight to the camera. Add #menu to the link to get the menu.
+  if (window.self === window.top && !/^#(menu|preview)$/.test(location.hash)) document.documentElement.classList.add('auto');
+</script>
 <div id="stage"></div>
 
 <section class="launch" id="launch">
@@ -92,6 +119,15 @@ button.small { padding: 8px 12px; font-size: 14px; margin-left: auto; }
 </section>
 
 <div class="hint" id="hint" hidden>Aim at the emblem</div>
+<button class="shutter" id="shutter" type="button" aria-label="Take a picture" hidden></button>
+<div class="flash" id="flash"></div>
+<div class="shot" id="shot" hidden>
+  <img id="shotImg" alt="Your photo with the robot">
+  <div class="shot-bar">
+    <div class="row"><button id="shotSave" type="button">Save photo</button><button id="shotClose" class="ghost" type="button">Back to camera</button></div>
+    <p id="shotHint">Or press and hold the photo to save it.</p>
+  </div>
+</div>
 <div class="status" id="status" hidden>
   <div class="readout"><small id="readLabel">System status</small><span id="readText">Calibrating</span></div>
   <button id="replay" type="button" hidden>Replay</button>
@@ -587,7 +623,56 @@ function update(c, t) {
   let cur = STATUS[0]; for (const s of STATUS) if (t >= s[0]) cur = s;
   if (readText.textContent !== cur[2]) { readLabel.textContent = cur[1]; readText.textContent = cur[2]; }
   replayBtn.hidden = t < T.replay;
+  shutterBtn.hidden = !(t >= T.rip && view.live);
 }
+
+// ---------- photo capture ----------
+const view = { renderer: null, scene: null, camera: null, video: null, live: false };
+const shutterBtn = document.getElementById('shutter'), shot = document.getElementById('shot');
+const shotImg = document.getElementById('shotImg'), flash = document.getElementById('flash');
+let shotFile = null, shotURL = null;
+function capture() {
+  const { renderer, scene, camera, video } = view; if (!renderer) return;
+  renderer.render(scene, camera);                 // draw now so the WebGL buffer is fresh
+  const gl = renderer.domElement, W = gl.width, H = gl.height;
+  const out = document.createElement('canvas'); out.width = W; out.height = H;
+  const ctx = out.getContext('2d');
+  if (video && video.videoWidth) {
+    // match how the live camera feed is laid out behind the 3D view
+    const box = stage.getBoundingClientRect(), vr = video.getBoundingClientRect(), k = W / box.width;
+    ctx.drawImage(video, (vr.left - box.left) * k, (vr.top - box.top) * k, vr.width * k, vr.height * k);
+  } else { ctx.fillStyle = '#0a1222'; ctx.fillRect(0, 0, W, H); }
+  ctx.drawImage(gl, 0, 0, W, H);
+  // small credit line in the corner
+  const fs = Math.round(W * .028); ctx.font = '700 ' + fs + 'px Barlow, sans-serif'; ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = fs * .4;
+  ctx.fillText('Kept for the petting zoo, ' + new Date().getFullYear(), W - fs, H - fs);
+  const dataURL = out.toDataURL('image/jpeg', .92);
+  const bin = atob(dataURL.split(',')[1]), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'image/jpeg' });
+  shotFile = new File([blob], 'training-data-robot.jpg', { type: 'image/jpeg' });
+  if (shotURL) URL.revokeObjectURL(shotURL);
+  shotURL = URL.createObjectURL(blob); shotImg.src = shotURL;
+  flash.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => flash.classList.remove('on')));
+  try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+  shot.hidden = false;
+}
+shutterBtn.addEventListener('click', capture); window.__capture = capture;
+document.getElementById('shotClose').addEventListener('click', () => { shot.hidden = true; });
+document.getElementById('shotSave').addEventListener('click', async () => {
+  if (!shotFile) return;
+  const hintEl = document.getElementById('shotHint');
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [shotFile] })) { await navigator.share({ files: [shotFile] }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  // no share sheet (most computers): fall back to a download
+  try {
+    const a = document.createElement('a'); a.href = shotURL; a.download = shotFile.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    hintEl.textContent = 'Saved to your downloads. You can also right-click the photo.';
+  } catch (e) { hintEl.textContent = 'Press and hold (or right-click) the photo to save it.'; }
+});
 
 // ---------- modes ----------
 const launch = document.getElementById('launch'), statusBar = document.getElementById('status'), hint = document.getElementById('hint');
@@ -631,31 +716,34 @@ async function startPreview(reason) {
     camera.lookAt(0, .02, 0);
     update(c, clockT); renderer.render(scene, camera);
   });
+  Object.assign(view, { renderer, scene, camera, video: null, live: true });
   if (reason) { readLabel.textContent = 'Preview mode'; }
 }
 
-async function startAR() {
+async function startAR(auto = false) {
   const note = document.getElementById('camNote');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     note.textContent = 'This viewer does not allow camera access, so here is the preview instead. Open the hosted link in Safari or Chrome for the full AR effect.';
     note.hidden = false; return startPreview('no-camera');
   }
-  launch.hidden = true; hint.hidden = false;
+  launch.hidden = true;
+  if (auto) { hint.textContent = 'Tap once for sound'; hint.hidden = false; }   // the only thing on screen until the shirt is found
+  else { hint.textContent = 'Aim at the emblem'; hint.hidden = false; }
   try {
     const [{ MindARThree }] = await Promise.all([import('mindar-image-three'), fontsReady]);
     baseImg = baseImg || await loadImg('emblem_base.png');
     const mindar = new MindARThree({
       container: stage, imageTargetSrc: 'target.mind', maxTrack: 1,
       filterMinCF: 0.0001, filterBeta: 0.01, warmupTolerance: 3, missTolerance: 8,
-      uiLoading: 'yes', uiScanning: 'yes', uiError: 'yes'
+      uiLoading: 'yes', uiScanning: auto ? 'no' : 'yes', uiError: 'yes'
     });
     const { renderer, scene, camera } = mindar;
     addLights(scene);
     const c = buildContent();
     const anchor = mindar.addAnchor(0); anchor.group.add(c.root);
     let visible = false;
-    anchor.onTargetFound = () => { visible = true; hint.hidden = true; statusBar.hidden = false; pauseSounds(false); };
-    anchor.onTargetLost = () => { visible = false; hint.hidden = false; pauseSounds(true); };
+    anchor.onTargetFound = () => { visible = true; view.live = true; if (!auto || soundPrimed) hint.hidden = true; statusBar.hidden = false; pauseSounds(false); };
+    anchor.onTargetLost = () => { visible = false; view.live = false; if (!auto) hint.hidden = false; pauseSounds(true); };
     await mindar.start();
     restart(); last = performance.now();
     renderer.setAnimationLoop(now => {
@@ -663,9 +751,10 @@ async function startAR() {
       if (visible) clockT += dt;
       update(c, clockT); renderer.render(scene, camera);
     });
+    Object.assign(view, { renderer, scene, camera, video: stage.querySelector('video'), live: visible });
   } catch (err) {
     console.error(err);
-    stage.innerHTML = ''; hint.hidden = true; launch.hidden = false;
+    stage.innerHTML = ''; hint.hidden = true; document.documentElement.classList.remove('auto'); launch.hidden = false;
     note.textContent = 'The camera could not start here (' + (err && err.name || 'blocked') + '). Showing the preview instead. For the full AR effect, open the hosted link in Safari or Chrome and allow camera access.';
     note.hidden = false;
     setTimeout(() => startPreview('camera-failed'), 2200);
@@ -677,15 +766,27 @@ if (window.self !== window.top) {
   const a = document.getElementById('startAR'), p = document.getElementById('startPreview');
   p.className = ''; a.className = 'ghost'; p.textContent = 'Watch the robot break out';
   a.textContent = 'Try the AR camera'; a.parentNode.insertBefore(p, a);
+  // the camera is blocked in this viewer; point to the hosted copy where it works
+  const cam = document.createElement('a'); cam.className = 'camlink';
+  cam.href = 'https://shuck-it.github.io/AIEncabulatorMAx/'; cam.target = '_blank'; cam.rel = 'noopener';
+  cam.textContent = 'Open the camera version';
+  a.replaceWith(cam); p.className = 'ghost';
 }
 let tester = null;
 document.getElementById('testSound').addEventListener('click', () => {
   try { if (tester) { tester.pause(); } tester = new Audio('voice.mp3?v=2'); tester.play().catch(err => {
     const n = document.getElementById('camNote'); n.textContent = 'This viewer blocked sound (' + (err && err.name || 'error') + '). Try opening the page in Safari or Chrome.'; n.hidden = false; }); } catch (e) {}
 });
-document.getElementById('startAR').addEventListener('click', () => { primeAudio(); startAR(); });
+document.getElementById('startAR')?.addEventListener('click', () => { primeAudio(); startAR(); });
 document.getElementById('startPreview').addEventListener('click', () => { primeAudio(); startPreview(); });
 if (location.hash === '#preview') startPreview();
+// any tap on the camera view unlocks sound (phones only allow audio after a tap)
+let soundPrimed = false;
+document.addEventListener('pointerdown', e => {
+  if (soundPrimed || !launch.hidden) return;
+  soundPrimed = true; primeAudio(); hint.hidden = true;
+}, { capture: true });
+if (document.documentElement.classList.contains('auto')) startAR(true);
 </script>
 
 </body>
