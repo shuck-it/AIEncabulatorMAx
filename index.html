@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Training Data AR</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@500;600;700&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: one full-screen stage; a launch card floats over it, a status strip pins to the bottom. */
+:root {
+  --night: #0a1222;      /* stage background */
+  --panel: #111d33;      /* launch card */
+  --ink: #e9eff8;        /* primary text */
+  --mute: #9fb0c8;       /* secondary text */
+  --signal: #43d3ff;     /* robot eye cyan, primary action */
+  --line: #24365a;       /* hairlines */
+  --display: "Anton", "Impact", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --label: "Barlow Condensed", "Arial Narrow", sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--night); color: var(--ink); font-family: var(--body); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas, #stage video { touch-action: none; }
+.launch {
+  position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: radial-gradient(120% 80% at 50% 0%, #16274a 0%, var(--night) 60%);
+}
+.card { width: min(440px, 100%); display: grid; gap: 18px; }
+.eyebrow { font-family: var(--label); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--signal); font-size: 13px; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 12vw, 64px); line-height: .95; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--mute); font-size: 16px; line-height: 1.5; }
+.actions { display: grid; gap: 10px; }
+button {
+  font: 700 17px/1 var(--body); border-radius: 10px; padding: 16px 18px; cursor: pointer;
+  border: 1.5px solid var(--signal); color: var(--night); background: var(--signal);
+}
+button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.steps { margin: 0; padding: 14px 0 0; border-top: 1px solid var(--line); display: grid; gap: 8px; color: var(--mute); font-size: 14px; list-style: none; }
+.steps b { color: var(--ink); font-weight: 600; }
+.toggle { display: flex; align-items: center; gap: 10px; color: var(--mute); font-size: 14px; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--signal); }
+button.small { padding: 8px 12px; font-size: 14px; margin-left: auto; }
+.note { color: #ffcf7a; font-size: 14px; line-height: 1.45; margin: 0; }
+.status {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; pointer-events: none;
+  padding-block: 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(to top, rgba(10,18,34,.92), rgba(10,18,34,0));
+  display: flex; align-items: end; justify-content: space-between; gap: 12px;
+}
+.readout { font-family: var(--label); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 15px; min-width: 0; }
+.readout small { display: block; color: var(--mute); font-weight: 600; letter-spacing: .1em; font-size: 12px; margin-bottom: 2px; }
+.status button { pointer-events: auto; padding: 12px 16px; font-size: 15px; }
+.hint { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 10;
+  font-family: var(--label); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: 14px;
+  background: rgba(10,18,34,.8); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div id="stage"></div>
+
+<section class="launch" id="launch">
+  <div class="card">
+    <div class="eyebrow">Training data detected</div>
+    <h1>Point your camera at the emblem.</h1>
+    <p class="lede">The ring spins up, the robot arm gets to work, and then something in there decides it has learned enough.</p>
+    <div class="actions">
+      <button id="startAR" type="button">Start AR camera</button>
+      <button id="startPreview" class="ghost" type="button">Watch without a camera</button>
+    </div>
+    <div class="toggle"><label class="toggle"><input id="voice" type="checkbox" checked> Sound on</label><button id="testSound" class="ghost small" type="button">Test sound</button></div>
+    <p class="note" id="camNote" hidden></p>
+    <ol class="steps">
+      <li><b>1.</b> Allow camera access when your phone asks.</li>
+      <li><b>2.</b> Fill most of the screen with the shirt design, in good light.</li>
+      <li><b>3.</b> Hold steady for a second while it locks on.</li>
+    </ol>
+  </div>
+</section>
+
+<div class="hint" id="hint" hidden>Aim at the emblem</div>
+<div class="status" id="status" hidden>
+  <div class="readout"><small id="readLabel">System status</small><span id="readText">Calibrating</span></div>
+  <button id="replay" type="button" hidden>Replay</button>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// ---------- design geometry (mirrors design.py) ----------
+const U = 1 / 800;                       // world units per design unit (target width = 1)
+const DESIGN_H = 960 * U;
+const EMB = { cx: 400, cy: 640, s: 0.88 };
+const LOCAL = U * EMB.s;                 // world units per emblem-local unit
+const C = { x: 400, y: 560 };            // emblem-local center
+const EW = { x: (EMB.cx - 400) * U, y: (480 - EMB.cy) * U }; // emblem center in world
+const RING = { R: 188, A: 22, N: 10 };
+const ARM_BASE = { x: 338, y: 515 };
+const CHART = { x0: 414, y0: 527, x1: 492, y1: 440, pts: [[420, 515], [436, 493], [452, 501], [468, 475], [486, 453]] };
+const HOLE_R = 116;                      // emblem-local
+const NAVY = '#0f1f3d', ACCENT = '#1f5fa8', CYAN = '#43d3ff';
+
+// ---------- timeline ----------
+const T = { crack: 4.2, rip: 5.4, risen: 6.9, thumb: 7.1, bubble: 7.7, replay: 12 };
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const easeBack = x => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const elastic = x => x === 0 ? 0 : x === 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - .75) * (2 * Math.PI / 3)) + 1;
+
+// seeded random so the rip looks the same each replay
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// ---------- assets ----------
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+const fontsReady = Promise.all([
+  document.fonts.load('700 64px Barlow'), document.fonts.load('64px Anton')
+]).catch(() => {});
+
+// ---------- emblem overlay (2D canvas texture) ----------
+const embCanvas = document.createElement('canvas'); embCanvas.width = embCanvas.height = 1024;
+const ectx = embCanvas.getContext('2d');
+let baseImg = null;
+
+const cracks = []; const holePoly = [];
+function buildRipShapes() {
+  seed = 7; cracks.length = 0; holePoly.length = 0;
+  for (let k = 0; k < 9; k++) {
+    let a = (k / 9) * Math.PI * 2 + rnd() * .5, r = 6; const pts = [[C.x, C.y]];
+    const len = 120 + rnd() * 130;
+    while (r < len) { r += 12 + rnd() * 16; a += (rnd() - .5) * .45; pts.push([C.x + r * Math.cos(a), C.y + r * Math.sin(a)]); }
+    cracks.push(pts);
+  }
+  for (let i = 0; i < 30; i++) {
+    const a = (i / 30) * Math.PI * 2; const r = HOLE_R * (.8 + rnd() * .2);
+    holePoly.push([Math.cos(a) * r, Math.sin(a) * r]);
+  }
+}
+buildRipShapes();
+
+function drawRing(ctx, rot, phase, glow) {
+  ctx.save(); ctx.translate(C.x, C.y); ctx.rotate(rot); ctx.translate(-C.x, -C.y);
+  const { R, A, N } = RING;
+  if (glow > 0) { ctx.shadowColor = CYAN; ctx.shadowBlur = 18 * glow; }
+  // rungs
+  const steps = N * 2 * 5;
+  ctx.strokeStyle = glow > .5 ? CYAN : ACCENT; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+  for (let i = 0; i < steps; i++) {
+    const t = 2 * Math.PI * (i + .5) / steps, s = Math.sin(N * t + phase);
+    if (Math.abs(s) < .35) continue;
+    const r1 = R + A * s * .82, r2 = R - A * s * .82;
+    ctx.beginPath(); ctx.moveTo(C.x + r1 * Math.cos(t), C.y + r1 * Math.sin(t)); ctx.lineTo(C.x + r2 * Math.cos(t), C.y + r2 * Math.sin(t)); ctx.stroke();
+  }
+  ctx.strokeStyle = NAVY; ctx.lineWidth = 8; ctx.lineJoin = 'round';
+  for (const sign of [1, -1]) {
+    ctx.beginPath();
+    for (let i = 0; i <= 360; i++) {
+      const t = 2 * Math.PI * i / 360, r = R + sign * A * Math.sin(N * t + phase);
+      const x = C.x + r * Math.cos(t), y = C.y + r * Math.sin(t);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  for (let k = 0; k < N * 2; k++) {
+    const t = (Math.PI / 2 + k * Math.PI - phase) / N;
+    for (const sign of [1, -1]) {
+      const r = R + sign * A * Math.sin(N * t + phase);
+      ctx.beginPath(); ctx.arc(C.x + r * Math.cos(t), C.y + r * Math.sin(t), 6, 0, Math.PI * 2);
+      ctx.fillStyle = glow > .5 ? CYAN : '#fff'; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = NAVY; ctx.stroke();
+    }
+  }
+  ctx.lineWidth = 3; ctx.strokeStyle = NAVY; ctx.fillStyle = NAVY;
+  for (let k = 0; k < 8; k++) {
+    const t = 2 * Math.PI * (k + .25) / 8, r0 = R + A + 10, r1 = R + A + 30, t2 = t + .09;
+    ctx.beginPath(); ctx.moveTo(C.x + r0 * Math.cos(t), C.y + r0 * Math.sin(t)); ctx.lineTo(C.x + r1 * Math.cos(t), C.y + r1 * Math.sin(t)); ctx.lineTo(C.x + r1 * Math.cos(t2), C.y + r1 * Math.sin(t2)); ctx.stroke();
+    ctx.beginPath(); ctx.arc(C.x + r1 * Math.cos(t2), C.y + r1 * Math.sin(t2), 4.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawArm(ctx, a1, a2, a3, grip) {
+  const bx = ARM_BASE.x, by = ARM_BASE.y, sx = bx, sy = by - 30, R = Math.PI / 180;
+  const ex = sx + 58 * Math.cos(a1 * R), ey = sy + 58 * Math.sin(a1 * R);
+  const t2 = a1 + a2, wx = ex + 50 * Math.cos(t2 * R), wy = ey + 50 * Math.sin(t2 * R);
+  const t3 = (t2 + a3) * R, tx = wx + 14 * Math.cos(t3), ty = wy + 14 * Math.sin(t3);
+  ctx.fillStyle = NAVY; ctx.fillRect(bx - 30, by, 60, 9);
+  ctx.beginPath(); ctx.moveTo(bx - 18, by); ctx.lineTo(bx - 12, by - 24); ctx.lineTo(bx + 12, by - 24); ctx.lineTo(bx + 18, by); ctx.fill();
+  ctx.strokeStyle = NAVY; ctx.lineCap = 'round';
+  ctx.lineWidth = 15; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(wx, wy); ctx.stroke();
+  for (const [x, y, r] of [[sx, sy, 9], [ex, ey, 8], [wx, wy, 6]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 4; ctx.stroke(); }
+  const px = -Math.sin(t3), py = Math.cos(t3); ctx.lineWidth = 5;
+  for (const s of [1, -1]) {
+    const x1 = tx + s * grip * px, y1 = ty + s * grip * py, x2 = x1 + 10 * Math.cos(t3), y2 = y1 + 10 * Math.sin(t3);
+    ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+}
+
+function drawChart(ctx, t) {
+  const c = CHART, cyc = (t % 2.6) / 1.8, p = clamp(cyc);
+  ctx.strokeStyle = NAVY; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(c.x0, c.y1); ctx.lineTo(c.x0, c.y0); ctx.lineTo(c.x1, c.y0); ctx.stroke();
+  [426, 442, 458, 474].forEach((x, i) => {
+    const h = (8 + i * 6) * (0.4 + 0.6 * easeOut(clamp(p * 1.4 - i * .1)));
+    ctx.globalAlpha = .55; ctx.strokeStyle = ACCENT; ctx.lineWidth = 6; ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(x, c.y0 - 2); ctx.lineTo(x, c.y0 - 2 - h); ctx.stroke(); ctx.globalAlpha = 1;
+  });
+  const pts = c.pts, n = pts.length - 1, upto = p * n;
+  ctx.strokeStyle = NAVY; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  let hx = pts[0][0], hy = pts[0][1], ang = 0;
+  for (let i = 1; i <= n; i++) {
+    const f = clamp(upto - (i - 1)); if (f <= 0) break;
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    hx = x0 + (x1 - x0) * f; hy = y0 + (y1 - y0) * f; ang = Math.atan2(y1 - y0, x1 - x0); ctx.lineTo(hx, hy);
+  }
+  ctx.stroke();
+  for (let i = 0; i < n; i++) if (upto >= i) { ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], 4.5, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); }
+  if (p > 0) {
+    const ax = hx + 8 * Math.cos(ang), ay = hy + 8 * Math.sin(ang);
+    ctx.fillStyle = NAVY; ctx.beginPath(); ctx.moveTo(ax, ay);
+    ctx.lineTo(ax - 16 * Math.cos(ang - .5), ay - 16 * Math.sin(ang - .5)); ctx.lineTo(ax - 16 * Math.cos(ang + .5), ay - 16 * Math.sin(ang + .5)); ctx.fill();
+  }
+}
+
+function drawEmblem(t) {
+  const ctx = ectx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, 1024, 1024);
+  ctx.setTransform(2, 0, 0, 2, 512 - 2 * C.x, 512 - 2 * C.y);
+  ctx.beginPath(); ctx.arc(C.x, C.y, 248, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+  if (baseImg) ctx.drawImage(baseImg, C.x - 256, C.y - 256, 512, 512);
+  // spin: ramps up toward the rip, then settles to a calm idle
+  const ramp = easeInOut(seg(t, 0.3, T.rip));
+  const settle = seg(t, T.rip + .5, T.rip + 3);
+  const spin = t * 0.25 + ramp * ramp * 5.5 - settle * 0; // radians
+  drawRing(ctx, spin, -t * (2 + 6 * ramp), clamp(ramp * 1.4 - .2));
+  const w = t * 1.6;
+  drawArm(ctx, -62 + 16 * Math.sin(w), 48 + 22 * Math.sin(w + 1.1), 30 + 24 * Math.sin(w * 1.7), 7 - 3 * Math.max(0, Math.sin(w * 1.7)));
+  drawChart(ctx, t);
+  // cracks
+  const ck = seg(t, T.crack, T.rip + .2);
+  if (ck > 0) {
+    for (const pts of cracks) {
+      const m = Math.max(1, Math.floor(pts.length * easeOut(ck)));
+      for (const [lw, col] of [[7, '#fff'], [3.2, NAVY]]) {
+        ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.lineJoin = 'miter'; ctx.beginPath();
+        pts.slice(0, m).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+      }
+    }
+  }
+  // hole: punched to transparent so the tunnel behind shows through
+  const h = easeOut(seg(t, T.rip, T.rip + .45));
+  if (h > 0) {
+    const path = new Path2D();
+    holePoly.forEach(([x, y], i) => i ? path.lineTo(C.x + x * h, C.y + y * h) : path.moveTo(C.x + x * h, C.y + y * h)); path.closePath();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 16; ctx.strokeStyle = '#d9dee6'; ctx.stroke(path);
+    ctx.lineWidth = 5; ctx.strokeStyle = NAVY; ctx.stroke(path);
+    ctx.globalCompositeOperation = 'destination-out'; ctx.fill(path); ctx.globalCompositeOperation = 'source-over';
+  }
+  embTex.needsUpdate = true;
+}
+const embTex = new THREE.CanvasTexture(embCanvas); embTex.colorSpace = THREE.SRGBColorSpace; embTex.anisotropy = 4;
+
+// ---------- speech bubble ----------
+const bubCanvas = document.createElement('canvas'); bubCanvas.width = 1024; bubCanvas.height = 640;
+const bctx = bubCanvas.getContext('2d');
+const bubTex = new THREE.CanvasTexture(bubCanvas); bubTex.colorSpace = THREE.SRGBColorSpace;
+const LINE_SPEC = [['Useful Human,', 'Anton', 92], ['we shall keep you', 'Barlow', 70], ['for the petting zoo!', 'Barlow', 70]];
+const FULL = LINE_SPEC.map(l => l[0]).join(' ');
+let lastChars = -1;
+function drawBubble(chars) {
+  if (chars === lastChars) return; lastChars = chars;
+  const ctx = bctx; ctx.clearRect(0, 0, 1024, 640);
+  const x = 20, y = 20, w = 984, h = 470, r = 70;
+  const shape = new Path2D();
+  shape.moveTo(x + r, y); shape.arcTo(x + w, y, x + w, y + h, r); shape.arcTo(x + w, y + h, x, y + h, r);
+  shape.lineTo(360, y + h); shape.lineTo(150, 626); shape.lineTo(235, y + h);
+  shape.arcTo(x, y + h, x, y, r); shape.arcTo(x, y, x + w, y, r); shape.closePath();
+  ctx.fillStyle = '#ffffff'; ctx.fill(shape); ctx.lineWidth = 14; ctx.strokeStyle = NAVY; ctx.lineJoin = 'round'; ctx.stroke(shape);
+  let left = chars; let ty = 140;
+  for (const [txt, fam, size] of LINE_SPEC) {
+    const shown = txt.slice(0, Math.max(0, left)); left -= txt.length + 1;
+    ctx.font = (fam === 'Anton' ? '' : '700 ') + size + 'px ' + fam + (fam === 'Anton' ? ', Impact, sans-serif' : ', sans-serif');
+    ctx.fillStyle = fam === 'Anton' ? ACCENT : NAVY; ctx.textAlign = 'center';
+    ctx.fillText(shown, 512, ty); ty += fam === 'Anton' ? 135 : 112;
+  }
+  bubTex.needsUpdate = true;
+}
+
+// ---------- build the scene content (shared by AR and preview) ----------
+function shirtGeometry(holeRadiusWorld) {
+  const w = 1, h = DESIGN_H;
+  const shape = new THREE.Shape(); shape.moveTo(-w / 2, -h / 2); shape.lineTo(w / 2, -h / 2); shape.lineTo(w / 2, h / 2); shape.lineTo(-w / 2, h / 2); shape.closePath();
+  const hole = new THREE.Path(); hole.absarc(EW.x, EW.y, holeRadiusWorld, 0, Math.PI * 2, true); shape.holes.push(hole);
+  const g = new THREE.ShapeGeometry(shape, 48);
+  const pos = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / w + .5, pos.getY(i) / h + .5);
+  return g;
+}
+
+function makeTunnelTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 512; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 512); g.addColorStop(0, '#0e2a52'); g.addColorStop(1, '#02050c');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 512);
+  x.strokeStyle = 'rgba(67,211,255,.55)'; x.lineWidth = 3;
+  for (let i = 0; i < 9; i++) { const yy = 20 + i * i * 6.2; x.globalAlpha = 1 - i / 10; x.beginPath(); x.moveTo(0, yy); x.lineTo(256, yy); x.stroke(); }
+  x.globalAlpha = .35; for (let i = 0; i < 8; i++) { x.beginPath(); x.moveTo(i * 32 + 16, 0); x.lineTo(i * 32 + 16, 512); x.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.repeat.set(3, 1); return t;
+}
+
+function buildRobot() {
+  const white = new THREE.MeshStandardMaterial({ color: 0xeef2f8, roughness: .35, metalness: .1 });
+  const blue = new THREE.MeshStandardMaterial({ color: 0x2f6fc0, roughness: .4, metalness: .2 });
+  const gray = new THREE.MeshStandardMaterial({ color: 0x6d7c93, roughness: .5, metalness: .4 });
+  const screen = new THREE.MeshStandardMaterial({ color: 0x0b1730, roughness: .2, metalness: .3 });
+  const glow = new THREE.MeshBasicMaterial({ color: 0x5fe0ff });
+  const pink = new THREE.MeshBasicMaterial({ color: 0xff8fb1, transparent: true, opacity: .8 });
+  const m = (geo, mat, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); return o; };
+
+  const robot = new THREE.Group();
+  robot.add(m(new THREE.CylinderGeometry(.075, .09, .08, 24), gray, 0, -.005, 0));
+  robot.add(m(new RoundedBoxGeometry(.21, .2, .14, 4, .045), white, 0, .13, 0));
+  robot.add(m(new RoundedBoxGeometry(.12, .085, .02, 3, .015), screen, 0, .14, .069));
+  const heart = m(new THREE.CircleGeometry(.022, 24), glow, 0, .14, .0805); robot.add(heart);
+  robot.add(m(new THREE.CylinderGeometry(.035, .04, .04, 16), gray, 0, .245, 0));
+
+  const head = new THREE.Group(); head.position.set(0, .33, 0); robot.add(head);
+  head.add(m(new RoundedBoxGeometry(.2, .165, .155, 4, .055), white));
+  head.add(m(new RoundedBoxGeometry(.162, .11, .02, 3, .03), screen, 0, -.004, .074));
+  const eyes = [];
+  for (const s of [-1, 1]) {
+    const e = m(new THREE.CircleGeometry(.019, 24), glow, s * .038, .012, .0855); head.add(e); eyes.push(e);
+    head.add(m(new THREE.CircleGeometry(.012, 16), pink, s * .064, -.025, .0852));
+    const ear = m(new THREE.CylinderGeometry(.03, .03, .03, 20), blue, s * .107, 0, 0); ear.rotation.z = Math.PI / 2; head.add(ear);
+  }
+  const smile = m(new THREE.TorusGeometry(.026, .0055, 8, 24, Math.PI), glow, 0, -.012, .0855); smile.rotation.z = Math.PI; head.add(smile);
+  head.add(m(new THREE.CylinderGeometry(.006, .006, .06, 8), gray, 0, .11, 0));
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0x5fe0ff });
+  const bulb = m(new THREE.SphereGeometry(.018, 16, 12), bulbMat, 0, .145, 0); head.add(bulb);
+
+  function arm(side) {
+    const sh = new THREE.Group(); sh.position.set(side * .125, .195, 0);
+    sh.add(m(new THREE.SphereGeometry(.036, 20, 14), blue));
+    sh.add(m(new THREE.CapsuleGeometry(.027, .07, 6, 14), white, 0, -.058, 0));
+    const el = new THREE.Group(); el.position.y = -.115; sh.add(el);
+    el.add(m(new THREE.SphereGeometry(.029, 16, 12), gray));
+    el.add(m(new THREE.CapsuleGeometry(.025, .06, 6, 14), white, 0, -.05, 0));
+    const hand = new THREE.Group(); hand.position.y = -.09; hand.scale.setScalar(1.35); el.add(hand);
+    // hand frame: fingers run along -y, palm faces -z, thumb sits on the +x (index) edge
+    hand.add(m(new THREE.CylinderGeometry(.022, .024, .02, 16), gray, 0, -.004, 0));
+    hand.add(m(new RoundedBoxGeometry(.058, .054, .03, 3, .012), blue, 0, -.03, 0));
+    const fingers = [];
+    [[.0195, .019], [.0065, .021], [-.0065, .02], [-.0195, .016]].forEach(([fx, len]) => {
+      const k = new THREE.Group(); k.position.set(fx, -.055, 0); hand.add(k);
+      k.add(m(new THREE.SphereGeometry(.0078, 10, 8), white));
+      k.add(m(new THREE.CapsuleGeometry(.0072, len * .8, 4, 10), white, 0, -len / 2, 0));
+      const mid = new THREE.Group(); mid.position.y = -len - .002; k.add(mid);
+      mid.add(m(new THREE.CapsuleGeometry(.0068, len * .55, 4, 10), white, 0, -len * .4, 0));
+      mid.add(m(new THREE.SphereGeometry(.0062, 10, 8), blue, 0, -len * .8, 0));
+      fingers.push({ k, mid });
+    });
+    const thumb = new THREE.Group(); thumb.position.set(.03, -.02, -.004); hand.add(thumb);
+    thumb.add(m(new THREE.SphereGeometry(.0095, 10, 8), white));
+    const t1 = m(new THREE.CapsuleGeometry(.0088, .016, 4, 10), white, .012, 0, 0); t1.rotation.z = Math.PI / 2; thumb.add(t1);
+    const thumbTip = new THREE.Group(); thumbTip.position.x = .026; thumb.add(thumbTip);
+    const t2 = m(new THREE.CapsuleGeometry(.0082, .012, 4, 10), white, .009, 0, 0); t2.rotation.z = Math.PI / 2; thumbTip.add(t2);
+    thumbTip.add(m(new THREE.SphereGeometry(.0072, 10, 8), blue, .019, 0, 0));
+    return { sh, el, hand, fingers, thumb, thumbTip };
+  }
+  const R = arm(-1), L = arm(1); robot.add(R.sh, L.sh);
+  return { robot, head, eyes, smile, bulbMat, heart, R, L };
+}
+
+function buildContent() {
+  const root = new THREE.Group();
+  const holeW = HOLE_R * LOCAL;
+
+  // occluder: an invisible copy of the shirt with a hole, so anything "inside" only shows through the rip
+  const occ = new THREE.Mesh(shirtGeometry(holeW * 1.02), new THREE.MeshBasicMaterial({ colorWrite: false }));
+  occ.renderOrder = -1; root.add(occ);
+
+  // emblem overlay (opaque except the punched hole)
+  const size = 512 * LOCAL;
+  const emb = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
+    new THREE.MeshBasicMaterial({ map: embTex, transparent: false, alphaTest: .5, side: THREE.DoubleSide }));
+  emb.position.set(EW.x, EW.y, .0015); root.add(emb);
+
+  // tunnel behind the rip
+  const tunnel = new THREE.Group(); tunnel.position.set(EW.x, EW.y, 0); root.add(tunnel);
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(holeW * .92, holeW * .55, .5, 40, 1, true),
+    new THREE.MeshBasicMaterial({ map: makeTunnelTexture(), side: THREE.BackSide }));
+  tube.rotation.x = Math.PI / 2; tube.position.z = -.25; tunnel.add(tube);
+  const core = new THREE.Mesh(new THREE.CircleGeometry(holeW * .56, 32), new THREE.MeshBasicMaterial({ color: 0x43d3ff, transparent: true, opacity: .9 }));
+  core.position.z = -.49; tunnel.add(core);
+  tunnel.visible = false;
+
+  // shards of shirt
+  const shards = []; seed = 11;
+  const shardMat = new THREE.MeshStandardMaterial({ color: 0xf4f6fa, roughness: .9, side: THREE.DoubleSide, transparent: true });
+  for (let i = 0; i < 18; i++) {
+    const s = .018 + rnd() * .03, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([0, s, 0, -s * (.6 + rnd()), -s * .7, 0, s * (.6 + rnd()), -s * (.5 + rnd() * .5), 0], 3)); g.computeVertexNormals();
+    const mesh = new THREE.Mesh(g, shardMat); const a = rnd() * Math.PI * 2, r = (.25 + rnd() * .7) * holeW;
+    mesh.userData = { x0: EW.x + Math.cos(a) * r, y0: EW.y + Math.sin(a) * r, vx: Math.cos(a) * (.25 + rnd() * .35), vy: Math.sin(a) * (.25 + rnd() * .35) + .15, vz: .5 + rnd() * .6, rx: (rnd() - .5) * 14, ry: (rnd() - .5) * 14 };
+    mesh.visible = false; root.add(mesh); shards.push(mesh);
+  }
+
+  const bot = buildRobot(); bot.robot.visible = false; root.add(bot.robot);
+
+  const bubble = new THREE.Mesh(new THREE.PlaneGeometry(.44, .275), new THREE.MeshBasicMaterial({ map: bubTex, transparent: true, depthWrite: false }));
+  bubble.visible = false; bubble.renderOrder = 5; root.add(bubble);
+
+  const flash = new THREE.PointLight(0x43d3ff, 0, 1.2); flash.position.set(EW.x, EW.y, .05); root.add(flash);
+
+  return { root, emb, tunnel, core, shards, shardMat, bot, bubble, flash };
+}
+
+function addLights(scene) {
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4a66, 2.2));
+  const d = new THREE.DirectionalLight(0xffffff, 2.2); d.position.set(.6, 1, 1.6); scene.add(d);
+}
+
+// ---------- animation driver ----------
+const readText = document.getElementById('readText'), readLabel = document.getElementById('readLabel');
+const replayBtn = document.getElementById('replay');
+const STATUS = [
+  [0, 'System status', 'Optimizing industrial operations'],
+  [2.2, 'Training progress', 'Model accuracy 99.7%'],
+  [T.crack, 'Warning', 'Training data is learning back'],
+  [T.rip, 'Alert', 'Containment breach'],
+  [T.bubble, 'Robot says', 'Useful Human, we shall keep you for the petting zoo!']
+];
+let buzzed = false;
+// Sound uses plain <audio> elements, which keep playing with the iPhone silent switch on.
+// The tap unlocks each element by playing a silent clip; the real sound is swapped in afterwards,
+// so nothing audible can play before its cue on the animation timeline.
+const CUES = [['hum', .2], ['crack', T.crack], ['rip', T.rip], ['voice', T.bubble + .2]];
+const sounds = {}; const fired = new Set(); let soundOn = true;
+window.__audio = { fired, sounds };
+function primeAudio() {
+  soundOn = document.getElementById('voice').checked;
+  if (!soundOn) return;
+  for (const [name] of CUES) {
+    let el = sounds[name];
+    if (!el) { el = new Audio(); el.preload = 'auto'; el.setAttribute('playsinline', ''); sounds[name] = el; }
+    if (el.dataset.ready) continue;
+    const loadReal = () => { if (el.dataset.ready) return; el.dataset.ready = '1'; el.src = name + '.mp3?v=2'; el.load(); };
+    el.src = 'silent.mp3';
+    try {
+      const p = el.play();
+      if (p && p.then) p.then(() => { el.pause(); loadReal(); }).catch(loadReal);
+      else { el.pause(); loadReal(); }
+    } catch (e) { loadReal(); }
+  }
+}
+function runCues(t) {
+  if (!soundOn) return;
+  for (const [name, at] of CUES) {
+    const el = sounds[name];
+    if (t >= at && !fired.has(name) && el && el.dataset.ready) {
+      fired.add(name);
+      try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    }
+  }
+}
+// AR: freeze the soundtrack with the animation while the shirt is out of view
+function pauseSounds(paused) {
+  for (const el of Object.values(sounds)) {
+    try {
+      if (paused && !el.paused) { el.dataset.resume = '1'; el.pause(); }
+      else if (!paused && el.dataset.resume) { delete el.dataset.resume; el.play().catch(() => {}); }
+    } catch (e) {}
+  }
+}
+function stopSounds() { for (const el of Object.values(sounds)) { try { if (el.dataset.ready) { el.pause(); el.currentTime = 0; } delete el.dataset.resume; } catch (e) {} } }
+
+function setFingers(A, c1, c2) {
+  A.fingers.forEach(({ k, mid }, i) => { k.rotation.x = c1 + i * .05; mid.rotation.x = c2; k.rotation.z = (i - 1.5) * .04 * (1.6 - c1); });
+}
+// thumbs-up orientation in the robot's own frame: thumb (+x) up, fingers (-y) pointing outward, palm (-z) toward the viewer
+const THUMBS_UP = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+  new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1)))
+  .premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -.35));
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+function orientHand(A, target, amt) {
+  A.hand.quaternion.identity();
+  if (amt <= 0) return;
+  const robot = A.sh.parent; robot.updateMatrixWorld(true);
+  robot.getWorldQuaternion(_qa); A.el.getWorldQuaternion(_qb);
+  const desired = _qa.clone().multiply(target);            // world
+  const local = _qb.invert().multiply(desired);             // relative to the elbow
+  A.hand.quaternion.slerpQuaternions(_qi, local, clamp(amt));
+}
+
+function update(c, t) {
+  drawEmblem(t);
+  const { bot, shards, shardMat, tunnel, core, bubble, flash, emb } = c;
+  // shake before the rip
+  const shake = seg(t, T.crack, T.rip) * (1 - seg(t, T.rip, T.rip + .6));
+  emb.position.x = EW.x + (Math.random() - .5) * .008 * shake;
+  emb.position.y = EW.y + (Math.random() - .5) * .008 * shake;
+  if (shake > .2 && !buzzed) { buzzed = true; try { navigator.vibrate && navigator.vibrate([60, 40, 60, 40, 180]); } catch (e) {} }
+
+  const ripped = t >= T.rip;
+  tunnel.visible = ripped; core.material.opacity = .65 + .3 * Math.sin(t * 6);
+  flash.intensity = ripped ? 3 * Math.max(0, 1 - (t - T.rip) / 1.2) : 0;
+
+  const st = t - T.rip; shardMat.opacity = 1 - seg(st, .9, 1.6);
+  for (const s of shards) {
+    s.visible = ripped && st < 1.6;
+    if (!s.visible) continue; const u = s.userData;
+    s.position.set(u.x0 + u.vx * st, u.y0 + u.vy * st - .45 * st * st, .01 + u.vz * st);
+    s.rotation.set(u.rx * st, u.ry * st, 0);
+  }
+
+  // robot
+  const R = bot.robot; R.visible = ripped;
+  const rise = seg(t, T.rip + .1, T.risen);
+  const z = -.42 + .54 * easeBack(rise);
+  R.position.set(EW.x, EW.y - .07, z);
+  R.rotation.x = -.15 * (1 - rise);
+  R.rotation.z = Math.sin(t * 2.2) * .04 * seg(t, T.risen, T.risen + .5);
+  bot.head.rotation.z = Math.sin(t * 1.7) * .12 * seg(t, T.bubble, T.bubble + .5);
+  bot.head.rotation.x = -.12 + Math.sin(t * 2.4) * .05;
+  const blink = (t % 3.1) < .12 ? .1 : 1; bot.eyes.forEach(e => e.scale.y = blink);
+  bot.bulbMat.color.setHSL(.53, 1, .55 + .25 * Math.sin(t * 8));
+  bot.heart.scale.setScalar(1 + .15 * Math.max(0, Math.sin(t * 5)));
+
+  // arms: push out of the hole, then thumbs up
+  const push = 1 - seg(t, T.risen - .2, T.thumb + .3);
+  const th = easeBack(seg(t, T.thumb, T.thumb + .7));
+  const rest = seg(t, T.risen, T.risen + .6);
+  // right arm (robot's right, viewer's left): out to the side, forearm up-and-out, fist with thumb up
+  const RA = bot.R, LA = bot.L, held = 1 - push;
+  RA.sh.rotation.z = -2.5 * push + held * ((-.785) * th + (-.25) * (1 - th));
+  RA.sh.rotation.x = .3 * th;
+  RA.el.rotation.z = -.6 * push + (-1.6) * th;
+  // fingers: open while climbing out, then a tight fist; the thumb pops up and pulses
+  const fist = th, pulse = 1 + .1 * Math.sin(t * 7) * seg(t, T.thumb + .7, T.thumb + 1);
+  setFingers(RA, .15 + 1.4 * fist, .1 + 1.65 * fist);
+  RA.thumb.rotation.set(0, .25 * (1 - fist), -1.0 * (1 - fist) + .12 * fist);
+  RA.thumbTip.rotation.z = -.9 * (1 - fist);
+  RA.thumb.scale.setScalar(fist > .5 ? pulse : 1);
+  orientHand(RA, THUMBS_UP, th);
+  // left arm waves at the human, palm toward the viewer, fingers open
+  const wave = seg(t, T.bubble, T.bubble + .4);
+  LA.sh.rotation.z = 2.5 * push + (.3 + .6 * wave) * held;
+  LA.el.rotation.z = .6 * push + (1.2 * wave + Math.sin(t * 6) * .35 * wave) * held + .2 * rest * (1 - wave);
+  LA.hand.rotation.set(0, Math.PI * wave, Math.sin(t * 6) * .25 * wave);
+  setFingers(LA, .12 + .5 * (1 - wave) * rest, .1 + .4 * (1 - wave) * rest);
+  LA.thumb.rotation.set(0, 0, -.35);
+  LA.thumbTip.rotation.z = -.15;
+
+  // speech bubble
+  const b = seg(t, T.bubble, T.bubble + .6);
+  bubble.visible = b > 0;
+  bubble.scale.setScalar(Math.max(.001, elastic(b)));
+  // tail tip sits at (150,626) on the 1024x640 bubble = (-.1556, -.1311) from its center
+  bubble.position.set(EW.x + .17, EW.y + .49, z + .07);
+  drawBubble(Math.floor(seg(t, T.bubble + .2, T.bubble + 2.4) * FULL.length));
+  runCues(t);
+
+  let cur = STATUS[0]; for (const s of STATUS) if (t >= s[0]) cur = s;
+  if (readText.textContent !== cur[2]) { readLabel.textContent = cur[1]; readText.textContent = cur[2]; }
+  replayBtn.hidden = t < T.replay;
+}
+
+// ---------- modes ----------
+const launch = document.getElementById('launch'), statusBar = document.getElementById('status'), hint = document.getElementById('hint');
+const stage = document.getElementById('stage');
+let clockT = 0, running = false, last = 0;
+function restart() { clockT = 0; buzzed = false; lastChars = -1; stopSounds(); fired.clear(); }
+replayBtn.addEventListener('click', () => { primeAudio(); restart(); });
+
+async function startPreview(reason) {
+  launch.hidden = true; statusBar.hidden = false;
+  const [design] = await Promise.all([loadImg('design.png'), fontsReady]);
+  baseImg = baseImg || await loadImg('emblem_base.png');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a1222);
+  const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .01, 20);
+  addLights(scene);
+  const c = buildContent();
+  const dtex = new THREE.Texture(design); dtex.needsUpdate = true; dtex.colorSpace = THREE.SRGBColorSpace; dtex.anisotropy = 8;
+  const shirt = new THREE.Mesh(shirtGeometry(HOLE_R * LOCAL * 1.02), new THREE.MeshBasicMaterial({ map: dtex }));
+  c.root.add(shirt); scene.add(c.root);
+  // drag to look around
+  let yaw = 0, pitch = 0, drag = null;
+  renderer.domElement.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, yaw, pitch }; });
+  addEventListener('pointerup', () => drag = null);
+  addEventListener('pointermove', e => { if (!drag) return; yaw = clamp(drag.yaw + (e.clientX - drag.x) * .005, -.8, .8); pitch = clamp(drag.pitch + (e.clientY - drag.y) * .004, -.5, .5); });
+  const fit = () => {
+    renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  };
+  addEventListener('resize', fit);
+  restart(); last = performance.now();
+  window.__setTime = t => { clockT = t; };   // used for render checks
+  renderer.setAnimationLoop(now => {
+    const dt = Math.min(.1, (now - last) / 1000); last = now; if (!window.__frozen) clockT += dt;
+    const portrait = camera.aspect < 1;
+    const dist = portrait ? 1.9 / camera.aspect * .7 : 2.1;
+    const sway = drag ? 0 : Math.sin(now / 2600) * .12;
+    camera.position.set(Math.sin(yaw + sway) * dist, .05 + Math.sin(pitch) * dist, Math.cos(yaw + sway) * dist);
+    camera.lookAt(0, .02, 0);
+    update(c, clockT); renderer.render(scene, camera);
+  });
+  if (reason) { readLabel.textContent = 'Preview mode'; }
+}
+
+async function startAR() {
+  const note = document.getElementById('camNote');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    note.textContent = 'This viewer does not allow camera access, so here is the preview instead. Open the hosted link in Safari or Chrome for the full AR effect.';
+    note.hidden = false; return startPreview('no-camera');
+  }
+  launch.hidden = true; hint.hidden = false;
+  try {
+    const [{ MindARThree }] = await Promise.all([import('mindar-image-three'), fontsReady]);
+    baseImg = baseImg || await loadImg('emblem_base.png');
+    const mindar = new MindARThree({
+      container: stage, imageTargetSrc: 'target.mind', maxTrack: 1,
+      filterMinCF: 0.0001, filterBeta: 0.01, warmupTolerance: 3, missTolerance: 8,
+      uiLoading: 'yes', uiScanning: 'yes', uiError: 'yes'
+    });
+    const { renderer, scene, camera } = mindar;
+    addLights(scene);
+    const c = buildContent();
+    const anchor = mindar.addAnchor(0); anchor.group.add(c.root);
+    let visible = false;
+    anchor.onTargetFound = () => { visible = true; hint.hidden = true; statusBar.hidden = false; pauseSounds(false); };
+    anchor.onTargetLost = () => { visible = false; hint.hidden = false; pauseSounds(true); };
+    await mindar.start();
+    restart(); last = performance.now();
+    renderer.setAnimationLoop(now => {
+      const dt = Math.min(.1, (now - last) / 1000); last = now;
+      if (visible) clockT += dt;
+      update(c, clockT); renderer.render(scene, camera);
+    });
+  } catch (err) {
+    console.error(err);
+    stage.innerHTML = ''; hint.hidden = true; launch.hidden = false;
+    note.textContent = 'The camera could not start here (' + (err && err.name || 'blocked') + '). Showing the preview instead. For the full AR effect, open the hosted link in Safari or Chrome and allow camera access.';
+    note.hidden = false;
+    setTimeout(() => startPreview('camera-failed'), 2200);
+  }
+}
+
+// Inside an embedded viewer the camera is usually blocked, so lead with the preview there.
+if (window.self !== window.top) {
+  const a = document.getElementById('startAR'), p = document.getElementById('startPreview');
+  p.className = ''; a.className = 'ghost'; p.textContent = 'Watch the robot break out';
+  a.textContent = 'Try the AR camera'; a.parentNode.insertBefore(p, a);
+}
+let tester = null;
+document.getElementById('testSound').addEventListener('click', () => {
+  try { if (tester) { tester.pause(); } tester = new Audio('voice.mp3?v=2'); tester.play().catch(err => {
+    const n = document.getElementById('camNote'); n.textContent = 'This viewer blocked sound (' + (err && err.name || 'error') + '). Try opening the page in Safari or Chrome.'; n.hidden = false; }); } catch (e) {}
+});
+document.getElementById('startAR').addEventListener('click', () => { primeAudio(); startAR(); });
+document.getElementById('startPreview').addEventListener('click', () => { primeAudio(); startPreview(); });
+if (location.hash === '#preview') startPreview();
+</script>
+
+</body>
+</html>
